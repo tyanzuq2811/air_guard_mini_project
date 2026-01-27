@@ -169,6 +169,8 @@ result = ct.fit(
 
 ![Validation Comparison](./data/processed/co_training_viz/validation_comparison.png)
 
+**Bảng tổng quan:**
+
 | Vòng | Val Accuracy | Val F1-macro | Pseudo-labels | Unlabeled Pool |
 |------|--------------|--------------|---------------|----------------|
 | 1 | 0.7226 | 0.6502 | 500 | 383,962 → 383,462 |
@@ -181,6 +183,28 @@ result = ct.fit(
 | 8 | 0.7181 | 0.6468 | 500 | 380,462 → 379,962 |
 | 9 | 0.7173 | 0.6378 | 500 | 379,962 → 379,462 |
 | 10 | 0.7168 | 0.6461 | 500 | 379,462 → 378,962 |
+
+**Chi tiết từng model:**
+
+| Vòng | Model A thêm | Model B thêm | Tổng | Ghi chú |
+|------|--------------|--------------|------|----------|
+| 1 | 250 | 250 | 500 | Symmetric selection |
+| 2 | 250 | 250 | 500 | Cả 2 models confident |
+| 3 | 250 | 250 | 500 | Không thiếu samples |
+| 4 | 250 | 250 | 500 | Pool còn 99% |
+| 5 | 250 | 250 | 500 | Performance giảm |
+| 6 | 250 | 250 | 500 | Dao động |
+| 7 | 250 | 250 | 500 | Không cải thiện |
+| 8 | 250 | 250 | 500 | Giảm tiếp |
+| 9 | 250 | 250 | 500 | Confirmation bias |
+| 10 | 250 | 250 | 500 | Overfitting |
+
+**Lưu ý:**
+- Mỗi model chọn top 250 samples có confidence ≥ τ=0.90
+- Model A cho pseudo-labels → thêm vào training của Model B
+- Model B cho pseudo-labels → thêm vào training của Model A
+- Có thể 1 sample được cả 2 models chọn (conflict resolution: chọn model có confidence cao hơn)
+- Trong thực tế, cả 2 models đều đủ confident samples nên không bị thiếu
 
 ### Nhận Xét Chi Tiết
 
@@ -225,6 +249,28 @@ result = ct.fit(
 ---
 
 ## 5. Kết Quả So Sánh
+
+### Ensemble Strategy
+
+**Model cuối cùng được sử dụng:** **Ensemble của 2 models**
+
+```python
+# Prediction strategy:
+p1 = Model_A.predict_proba(X_view1)  # Probabilities từ View 1
+p2 = Model_B.predict_proba(X_view2)  # Probabilities từ View 2
+p_ensemble = (p1 + p2) / 2.0         # Average probabilities
+y_pred = argmax(p_ensemble)          # Chọn class có prob cao nhất
+```
+
+**Lý do chọn ensemble:**
+- Kết hợp thông tin từ cả 2 views
+- Giảm variance so với chọn 1 model
+- Ensemble thường robust hơn single model
+
+**Lưu ý:**
+- Không dùng voting vì cần smooth probabilities
+- Average probabilities tốt hơn max probabilities
+- Có thể thử weighted ensemble nhưng chưa implement
 
 ### Test Metrics
 
