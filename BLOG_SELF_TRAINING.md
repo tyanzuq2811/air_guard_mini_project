@@ -135,7 +135,7 @@ F1-macro cao nhất: τ = 0.90 → 0.5343
 
 ### Biểu Đồ So Sánh
 
-![Test Performance Comparison](data/processed/self_training_experiments/test_performance_comparison.png)
+![Test Performance Comparison](./data/processed/self_training_experiments/test_performance_comparison.png)
 
 **Nhận xét:**
 - τ = 0.80 đạt **Accuracy cao nhất** (0.5941)
@@ -149,7 +149,7 @@ F1-macro cao nhất: τ = 0.90 → 0.5343
 
 ### Số Pseudo-Labels Theo Vòng
 
-![Pseudo-labels Over Iterations](data/processed/self_training_experiments/pseudo_labels_over_iterations.png)
+![Pseudo-labels Over Iterations](./data/processed/self_training_experiments/pseudo_labels_over_iterations.png)
 
 #### **Nhận Xét Chi Tiết:**
 
@@ -192,7 +192,7 @@ Vòng 4-10: Giảm dần (353 ở vòng cuối)
 
 ### Validation F1-macro Theo Vòng
 
-![Validation F1 Over Iterations](data/processed/self_training_experiments/validation_f1_over_iterations.png)
+![Validation F1 Over Iterations](./data/processed/self_training_experiments/validation_f1_over_iterations.png)
 
 #### **Phân Tích Validation Performance:**
 
