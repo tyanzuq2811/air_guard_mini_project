@@ -1,2 +1,12 @@
 data/processed/
 *.pkl
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.venv/
+beijing_env/
