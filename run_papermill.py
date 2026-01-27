@@ -48,7 +48,7 @@ pm.execute_notebook(
     kernel_name=KERNEL,
 )
 
-# 4) Self-training
+# 4) Self-training (single τ = 0.90)
 pm.execute_notebook(
     "notebooks/semi_self_training.ipynb",
     "notebooks/runs/semi_self_training_run.ipynb",
@@ -63,6 +63,28 @@ pm.execute_notebook(
         METRICS_PATH="data/processed/metrics_self_training.json",
         PRED_SAMPLE_PATH="data/processed/predictions_self_training_sample.csv",
         ALERTS_SAMPLE_PATH="data/processed/alerts_self_training_sample.csv",
+        ALERT_FROM_CLASS="Unhealthy",
+    ),
+    language="python",
+    kernel_name=KERNEL,
+)
+
+# 4b) Self-training EXPERIMENTS (multiple τ values for comparison)
+print("\n" + "="*80)
+print("CHẠY THÍ NGHIỆM SELF-TRAINING VỚI NHIỀU GIÁ TRỊ τ")
+print("="*80)
+pm.execute_notebook(
+    "notebooks/semi_self_training_experiments.ipynb",
+    "notebooks/runs/semi_self_training_experiments_run.ipynb",
+    parameters=dict(
+        SEMI_DATASET_PATH="data/processed/dataset_for_semi.parquet",
+        CUTOFF="2017-01-01",
+        TAU_VALUES=[0.80, 0.90, 0.95],  # Reduced to 3 for faster execution
+        MAX_ITER=10,
+        MIN_NEW_PER_ITER=20,
+        VAL_FRAC=0.20,
+        RANDOM_STATE=42,
+        RESULTS_DIR="data/processed/self_training_experiments",
         ALERT_FROM_CLASS="Unhealthy",
     ),
     language="python",
@@ -146,7 +168,7 @@ pm.execute_notebook(
     kernel_name=KERNEL,
 )
 
-# 9) OPTIONAL: Summary report (read metrics and make charts)
+# 9) Summary report (read metrics and make charts)
 pm.execute_notebook(
     "notebooks/semi_supervised_report.ipynb",
     "notebooks/runs/semi_supervised_report_run.ipynb",
@@ -164,4 +186,22 @@ pm.execute_notebook(
     kernel_name=KERNEL,
 )
 
-print("Đã chạy xong pipeline (semi-supervised + supervised + regression + ARIMA + report)")
+print("\n" + "="*80)
+print("🎉 ĐÃ CHẠY XONG TOÀN BỘ PIPELINE!")
+print("="*80)
+print("\n📊 KẾT QUẢ ĐÃ TẠO:")
+print("✅ 1. Preprocessing & EDA")
+print("✅ 2. Semi-supervised dataset")
+print("✅ 3. Feature preparation")
+print("✅ 4. Self-training (τ=0.90)")
+print("✅ 4b. Self-training experiments (τ=0.70,0.80,0.85,0.90,0.95)")
+print("✅ 5. Co-training")
+print("✅ 6. Baseline supervised classification")
+print("✅ 7. Regression modelling")
+print("✅ 8. ARIMA forecasting")
+print("✅ 9. Summary report")
+print("\n📁 TẤT CẢ KẾT QUẢ TRONG:")
+print("   - data/processed/")
+print("   - data/processed/self_training_experiments/")
+print("   - notebooks/runs/")
+print("\n" + "="*80)
