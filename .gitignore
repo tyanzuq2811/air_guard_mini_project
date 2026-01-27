@@ -1,4 +1,6 @@
 data/processed/
+!data/processed/**/*.png
+!data/processed/**/*.csv
 *.pkl
 # Python cache
 __pycache__/
