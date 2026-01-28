@@ -1,315 +1,597 @@
-# Kết Quả Giải Quyết 3.3 - Khuyến Khích Nâng Cấp Dự Án
+# Phương Pháp Semi-Supervised Nâng Cao cho Dự Đoán AQI
 
-## 🎯 Tổng Quan Nhiệm Vụ Nâng Cấp
+> **Báo cáo:** Cải thiện độ chính xác dự đoán chất lượng không khí bằng FlexMatch-lite và Label Spreading
 
-Theo yêu cầu đề bài phần **3.3 Khuyến khích nâng cấp dự án**, chúng tôi đã thành công triển khai **cả 2 hướng mở rộng** để nâng chất lượng bài làm:
+**Sinh viên thực hiện:** [Đinh Trọng Quỳnh]
+**Môn học:** Data Mining  
+**Ngày báo cáo:** 28/01/2026
 
-### ✅ **Nhiệm vụ 1: Label Propagation/Label Spreading**
-> *"Nhóm có thể thử áp dụng Label Propagation/Label Spreading (thuật toán truyền nhãn trên đồ thị có sẵn trong scikit-learn) trên bộ dữ liệu này. Thuật toán đó coi mỗi mẫu (có nhãn và chưa nhãn) là nút trên đồ thị và lan truyền nhãn dựa trên cấu trúc khoảng cách của dữ liệu. Thử so sánh kết quả với self-training/co-training."*
+--
 
-**🎉 HOÀN THÀNH**: Triển khai Label Spreading với graph-based approach
+## 📋 Mục Lục
 
-### ✅ **Nhiệm vụ 2: Dynamic Threshold theo lớp (FlexMatch-lite)**
-> *"Dynamic Threshold theo lớp (FlexMatch-lite, tăng hiệu quả lớp hiếm): Thay vì dùng một ngưỡng chung τ, ta dùng ngưỡng theo lớp τc để giảm thiên lệch về lớp phổ biến, tăng recall cho lớp AQI nặng và cải thiện Macro-F1. Ngưỡng này sẽ thay đổi dựa trên trạng thái học của mô hình: τc(t) = AvgConfc(t)⋅τbase"*
-
-**🎉 HOÀN THÀNH**: Triển khai FlexMatch-lite với dynamic thresholds + Focal Loss
-
----
-
-## 🔬 Chi Tiết Triển Khai & Kết Quả
-
-### 1️⃣ **Label Spreading - Kết Quả Đạt Được**
-
-#### **🎯 Phương Pháp Áp Dụng**
-
-**Label Spreading** đã được triển khai thành công với approach:
-- **Graph Construction**: 420,768 samples tạo thành nodes trên similarity graph
-- **Edge Weights**: Sử dụng RBF kernel với similarity scores
-- **Label Propagation**: Global optimization thay vì iterative pseudo-labeling
-- **One-shot Learning**: Tránh confirmation bias hoàn toàn
-
-#### **📊 Kết Quả Performance**
-
-**So sánh với Self-Training/Co-Training:**
-
-| Method | Type | Accuracy | F1-Macro | F1-Weighted | Ưu điểm chính |
-|--------|------|----------|----------|-------------|---------------|
-| **Label Spreading** | **Graph-based** | **81.56%** | **77.23%** | **80.12%** | **Tránh confirmation bias** |
-| Co-Training | Two-view | 80.89% | 76.34% | 79.45% | View disagreement |
-| Self-Training | Iterative | 80.12% | 74.56% | 78.23% | Approach đơn giản |
-| Supervised Only | Baseline | 78.45% | 71.23% | 76.78% | Dữ liệu nhãn hạn chế |
-
-**🌟 Key Achievements:**
-- **+2.67% F1-macro** improvement so với Self-Training
-- **Global optimization** solution thay vì local decisions
-- **Stable performance** không bị degradation qua iterations
-- **Natural smoothness** phù hợp với time-series air quality data
-
-### 2️⃣ **FlexMatch-lite - Kết Quả Đạt Được**
-
-#### **🎯 Phương Pháp Dynamic Threshold**
-
-**FlexMatch-lite** đã được triển khai thành công với:
-- **Dynamic Threshold Formula**: τc(t) = AvgConfc(t) × τbase chính xác theo yêu cầu
-- **Class-specific Adaptation**: Mỗi AQI class có threshold riêng
-- **Bias Correction**: Lower threshold cho rare classes (Unhealthy, Very_Unhealthy, Hazardous)
-- **Focal Loss Integration**: Giảm trọng số easy examples, focus vào hard examples
-
-#### **📈 Evolution của Dynamic Thresholds**
-
-**Threshold Changes qua Iterations:**
-
-| AQI Class | Initial | After 3 iters | Final | Adaptation |
-|-----------|---------|---------------|-------|------------|
-| **Good** | 0.95 | 0.88 | 0.85 | Moderate decrease |
-| **Moderate** | 0.95 | 0.85 | 0.82 | Steady adaptation |
-| **Unhealthy** | 0.95 | 0.76 | 0.71 | **Significant drop** |
-| **Very_Unhealthy** | 0.95 | 0.72 | 0.65 | **Major adaptation** |
-| **Hazardous** | 0.95 | 0.68 | 0.60 | **Maximum sensitivity** |
-
-**🎯 Impact của Focal Loss:**
-- **Easy examples** (high confidence): Loss weight → 0
-- **Hard examples** (low confidence): Loss weight tăng mạnh
-- **Rare AQI classes**: Được prioritize trong training
-- **Model focus**: Shift từ easy samples sang pollution detection
-
-#### **🏆 Performance Results**
-
-**Breakthrough Performance:**
-
-| Method | Accuracy | F1-Macro | Rare Classes F1 | Improvement vs Self-Training |
-|--------|----------|----------|-----------------|------------------------------|
-| **FlexMatch-lite** | **82.34%** | **78.91%** | **Hazardous: 0.64** | **+33.3% F1 cho Hazardous** |
-| Self-Training (fixed τ) | 80.12% | 74.56% | Hazardous: 0.48 | Baseline comparison |
-| **Net Improvement** | **+2.22%** | **+4.35%** | **+0.16 F1** | **Highly Significant** |
+1. [Bối Cảnh và Vấn Đề](#1-bối-cảnh-và-vấn-đề)
+2. [Mục Tiêu Nghiên Cứu](#2-mục-tiêu-nghiên-cứu)
+3. [Phương Pháp Đề Xuất](#3-phương-pháp-đề-xuất)
+4. [Thí Nghiệm và Kết Quả](#4-thí-nghiệm-và-kết-quả)
+5. [So Sánh và Đánh Giá](#5-so-sánh-và-đánh-giá)
+6. [Kết Luận](#6-kết-luận)
 
 ---
 
-## 📊 Comprehensive Comparison Results
+## 1. Bối Cảnh và Vấn Đề
 
-### **🎯 Final Performance Summary**
+### 1.1. Tình Huống Thực Tế
 
-**Theo yêu cầu so sánh với self-training/co-training:**
+**Dự án Air Guard** - Dự đoán chất lượng không khí (AQI) tại Bắc Kinh:
+- **Dữ liệu:** 420,768 mẫu từ 12 trạm quan trắc (2013-2017)
+- **Mục tiêu:** Phân loại AQI thành 6 mức độ (Good → Hazardous)
+- **Thách thức:** Chỉ có **5% dữ liệu có nhãn** (labeled), 95% không có nhãn (unlabeled)
 
-| Method | Implementation | Accuracy | F1-Macro | Hazardous F1 | Key Innovation |
-|--------|---------------|----------|----------|--------------|----------------|
-| 🥇 **FlexMatch-lite** | **Dynamic τc + Focal** | **82.34%** | **78.91%** | **0.64** | **Adaptive thresholds** |
-| 🥈 **Label Spreading** | **Graph propagation** | **81.56%** | **77.23%** | **0.59** | **Global optimization** |
-| 🥉 Co-Training | Two-view learning | 80.89% | 76.34% | 0.54 | View disagreement |
-| Self-Training | Fixed threshold | 80.12% | 74.56% | 0.48 | Iterative pseudo-labeling |
-| Supervised | Labeled only | 78.45% | 71.23% | 0.41 | Limited labeled data |
+### 1.2. Vấn Đề Cần Giải Quyết
 
-### **✨ Key Achievements**
+#### Vấn đề 1: Thiếu Dữ liệu Có Nhãn
+- Gán nhãn thủ công tốn kém (cần chuyên gia môi trường)
+- Chỉ có ~20,000 mẫu labeled / 420,000 tổng mẫu
+- Supervised learning không hiệu quả với dữ liệu ít
 
-#### **1. Label Spreading Success** ✅
-- **Graph-based approach** successfully implemented
-- **+2.67% F1-macro** improvement vs Self-Training  
-- **No confirmation bias** achieved through global optimization
-- **Stable performance** across iterations
+#### Vấn đề 2: Class Imbalance (Mất Cân Bằng Lớp)
+| Lớp AQI | Số lượng mẫu | Tỷ lệ |
+|---------|--------------|-------|
+| **Moderate** (Trung bình) | ~126,000 | 30% |
+| **Good** (Tốt) | ~84,000 | 20% |
+| **Unhealthy** (Không lành mạnh) | ~63,000 | 15% |
+| **Very Unhealthy** (Rất xấu) | ~42,000 | 10% |
+| **Hazardous** (Nguy hiểm) | ~21,000 | **5%** ⚠️ |
 
-#### **2. FlexMatch-lite Success** ✅  
-- **Dynamic threshold τc(t) = AvgConfc(t) × τbase** exactly implemented
-- **Focal Loss LFocal = -α(1-pt)^γ log(pt)** successfully integrated
-- **+4.35% F1-macro** improvement vs Self-Training
-- **+33.3% F1-score** improvement cho Hazardous class (lớp hiếm nhất)
+**Hậu quả:**
+- Model thiên vị về lớp đa số (Moderate, Good)
+- Lớp hiếm (Hazardous, Very Unhealthy) bị bỏ qua
+- **Nguy hiểm:** Không cảnh báo được tình trạng ô nhiễm nghiêm trọng!
 
-#### **3. Rare Class Detection Success** 🎯
-
-**Detailed Class-wise Improvements:**
-
-| AQI Class | Frequency | Self-Training F1 | FlexMatch-lite F1 | Label Spreading F1 | Improvement |
-|-----------|-----------|------------------|-------------------|-------------------|-------------|
-| **Good** | 35% | 0.85 | **0.89** | **0.87** | +4.7% / +2.4% |
-| **Moderate** | 30% | 0.81 | **0.84** | **0.82** | +3.7% / +1.2% |
-| **Unhealthy** | 20% | 0.72 | **0.78** | **0.76** | +8.3% / +5.6% |
-| **Very_Unhealthy** | 10% | 0.62 | **0.71** | **0.68** | **+14.5% / +9.7%** |
-| **Hazardous** | 5% | 0.48 | **0.64** | **0.59** | **+33.3% / +22.9%** |
-
-**🚨 Critical Insight - Hazardous Class Breakthrough:**
-- **Self-Training**: Chỉ detect được 48% Hazardous events
-- **FlexMatch-lite**: Detect được **64% Hazardous events** (+33.3% improvement)
-- **Real-world Impact**: Thêm 134 severe pollution warnings được phát hiện từ 400 events
-- **Public Health**: Giảm thiểu risk exposure cho millions of people
-
-#### **4. Training Efficiency Analysis** ⚡
-
-**Convergence & Stability:**
-
-| Method | Iterations to Converge | Training Time | Stability | Computational Efficiency |
-|--------|------------------------|---------------|-----------|-------------------------|
-| **FlexMatch-lite** | 6-8 iterations | 6 minutes | Stable after iter 6 | Moderate (iterative) |
-| **Label Spreading** | 1 iteration | 2.5 minutes | Guaranteed global optimum | **High (one-shot)** |
-| Self-Training | 8-10 iterations | 8 minutes | Unstable, can degrade | Low (many iterations) |
-| Co-Training | 6-8 iterations | 12 minutes | Depends on view quality | Low (two models) |
-
-**⭐ Label Spreading Advantage:** One-shot global optimization vs iterative local search
+#### Vấn đề 3: Hạn Chế của Self-Training Cơ Bản
+- **Confirmation bias:** Model tin vào lỗi của chính nó
+- **Fixed threshold:** Tất cả lớp dùng cùng ngưỡng confidence → lớp hiếm khó được chọn
+- **F1-macro thấp:** Chỉ đạt 0.5343 (53.43%)
 
 ---
 
-## 🏆 Implementation Achievements & Results
+## 2. Mục Tiêu Nghiên Cứu
 
-### **🎯 System Architecture Success**
+### 2.1. Mục Tiêu Chính
 
-**Complete Implementation Delivered:**
-- **FlexMatchAQIClassifier**: Dynamic threshold system với 450+ lines production code
-- **LabelSpreadingAQIClassifier**: Graph-based global optimization system  
-- **Automated Pipeline**: End-to-end từ raw Beijing data đến predictions
-- **Interactive Dashboard**: Real-time visualization của training dynamics
-- **Testing Framework**: Multiple validation levels từ minimal đến full experiments
+**Cải thiện độ chính xác dự đoán AQI**, đặc biệt cho các lớp nguy hiểm (Hazardous, Very Unhealthy), bằng cách:
 
-### **📊 Dashboard & Visualization Success**
+1. ✅ Tận dụng 95% dữ liệu unlabeled
+2. ✅ Giải quyết class imbalance
+3. ✅ Tăng F1-macro score
+4. ✅ Cải thiện khả năng cảnh báo sớm
 
-**Interactive Analysis Platform:**
-- **Dynamic Threshold Evolution**: Real-time plots showing adaptation
-- **Graph Structure Visualization**: Network analysis của similarity relationships
-- **Performance Comparison**: Side-by-side method comparisons
-- **Class-wise Analysis**: Detailed breakdowns cho từng AQI level
-- **Training Dynamics**: Confidence evolution tracking
+### 2.2. Phương Pháp Tiếp Cận
 
-### **🧪 Experimental Framework Results**
+Phát triển **2 phương pháp semi-supervised nâng cao**:
 
-**Comprehensive Testing Pipeline:**
-- **Beijing Air Quality Dataset**: 420K samples, 12 stations, 4 years
-- **Temporal Validation**: Proper time-series split (2013-2016 train, 2017 test)
-- **Label Scarcity Simulation**: 95% masking realistic semi-supervised setting
-- **Statistical Testing**: Paired t-tests confirm significance (p < 0.01)
-- **Cross-validation**: 5-fold temporal splits for robustness
+| Phương pháp | Ý tưởng chính | Giải quyết vấn đề |
+|-------------|---------------|-------------------|
+| **FlexMatch-lite** | Dynamic threshold + Focal loss | Class imbalance |
+| **Label Spreading** | Graph-based propagation | Confirmation bias |
 
 ---
 
-## 🎖️ Đánh Giá Mức Độ Hoàn Thành
+## 3. Phương Pháp Đề Xuất
 
-### **✅ Requirement Fulfillment Checklist**
+### 3.1. FlexMatch-lite: Dynamic Threshold + Focal Loss
 
-#### **Nhiệm vụ 1: Label Propagation/Label Spreading**
-- ✅ **Scikit-learn LabelSpreading** successfully integrated
-- ✅ **Graph construction**: Mỗi sample = node, similarity = edges
-- ✅ **Label propagation**: Based on distance structure  
-- ✅ **Comparison**: Detailed comparison với self-training/co-training
-- ✅ **Performance**: +2.67% F1-macro improvement achieved
-- ✅ **Analysis**: Comprehensive insights về different approaches
+#### 3.1.1. Ý Tưởng
 
-#### **Nhiệm vụ 2: Dynamic Threshold + Focal Loss**
-- ✅ **Dynamic threshold**: τc(t) = AvgConfc(t) × τbase implemented exactly
-- ✅ **Class-specific thresholds**: Giảm thiên lệch lớp phổ biến  
-- ✅ **Rare class focus**: Tăng recall cho lớp AQI nặng
-- ✅ **Macro-F1 improvement**: +4.35% achieved
-- ✅ **Focal Loss**: LFocal = -α(1-pt)^γ log(pt) integrated perfectly
-- ✅ **Easy vs Hard examples**: Focus shifted to hard examples
-- ✅ **Rare class boost**: +33.3% improvement cho Hazardous class
+**Vấn đề với Self-Training thông thường:**
+```
+Tất cả lớp dùng cùng threshold τ = 0.90
+→ Lớp hiếm có confidence thấp → ít được chọn làm pseudo-label
+```
 
-### **🌟 Beyond Basic Requirements - Exceptional Achievements**
+**Giải pháp FlexMatch:**
+```
+Mỗi lớp có threshold riêng, tự động điều chỉnh
+→ Lớp hiếm: threshold thấp (dễ chọn)
+→ Lớp đa số: threshold cao (chặt chẽ)
+```
 
-**Production-Quality Deliverables:**
-1. **Robust Implementation**: 450+ lines of production-ready code với error handling
-2. **Interactive Dashboard**: Real-time visualization capabilities cho research và demo
-3. **Comprehensive Testing**: Multiple validation frameworks từ minimal đến full scale
-4. **Statistical Rigor**: Significance testing, confidence intervals, ablation studies
-5. **Complete Documentation**: 5 detailed technical blogs với tutorials
-6. **Reproducibility**: Full experimental pipeline có thể reproduce results
+#### 3.1.2. Cơ Chế Hoạt Động
 
-**Research Quality Standards:**
-- **Peer-review Ready**: Methods, experiments, và results meet academic standards
-- **Open Source**: Complete implementation available cho community
-- **Educational Value**: Comprehensive learning resource cho semi-supervised ML
-- **Practical Impact**: Direct applications cho environmental monitoring
+**Bước 1: Dynamic Threshold**
 
----
+Công thức: `τ_c = AvgConf_c × τ_base`
 
-## 🎯 Final Results Summary
+**Ví dụ thực tế:**
 
-### **🏅 Mission Accomplished - Both Upgrade Challenges**
+| Lớp | Avg Confidence | τ_base | Dynamic τ | Ý nghĩa |
+|-----|----------------|--------|-----------|---------|
+| Moderate (đa số) | 0.95 | 0.90 | **0.855** | Ngưỡng cao → chặt chẽ |
+| Hazardous (hiếm) | 0.75 | 0.90 | **0.675** | Ngưỡng thấp → dễ chọn |
 
-**✅ Challenge 1: Label Spreading Success**
-- **Graph-based Implementation**: Hoàn thành theo specification
-- **Performance Achievement**: +2.67% F1-macro improvement
-- **Technical Innovation**: Global optimization approach
-- **Stability**: No confirmation bias, guaranteed convergence
+**Bước 2: Focal Loss**
 
-**✅ Challenge 2: FlexMatch-lite Success**  
-- **Dynamic Threshold**: τc(t) = AvgConfc(t) × τbase implemented exactly
-- **Focal Loss**: LFocal = -α(1-pt)^γ log(pt) integrated successfully
-- **Outstanding Performance**: +4.35% F1-macro, +33.3% rare class improvement
-- **Real-world Impact**: 134% more severe pollution warnings detected
+Công thức: `L_focal = -(1 - p_t)^γ × log(p_t)`
 
-### **📈 Quantified Impact Summary**
+**Cơ chế:**
+- **Easy samples** (lớp đa số, dự đoán đúng): Weight thấp → bỏ qua
+- **Hard samples** (lớp hiếm, khó dự đoán): Weight cao → tập trung học
 
-**Performance Metrics:**
-- **Overall Improvement**: 7.02% combined F1-macro boost
-- **Critical Class Detection**: 33.3% better Hazardous event detection
-- **Public Health Impact**: 134% more severe warnings issued
-- **Computational Efficiency**: Label Spreading 2.5x faster than iterative methods
+**Ví dụ:**
+```
+Sample 1: Moderate class, confidence = 0.95
+→ Focal weight = (1-0.95)² = 0.0025 ≈ 0 → Bỏ qua
 
-**Technical Quality:**
-- **Implementation Scale**: 450+ lines production code
-- **Test Coverage**: Multiple validation levels
-- **Documentation**: 5 comprehensive technical documents  
-- **Statistical Significance**: p < 0.01 for all major improvements
+Sample 2: Hazardous class, confidence = 0.65
+→ Focal weight = (1-0.65)² = 0.1225 → Tập trung học
+```
 
-**Research Contributions:**
-- **Methodological**: First FlexMatch adaptation cho environmental domain
-- **Technical**: Production-ready semi-supervised pipeline
-- **Applied**: Direct impact on air quality monitoring accuracy
-- **Educational**: Complete learning framework cho advanced ML methods
+#### 3.1.3. Quy Trình Thực Hiện
+
+```mermaid
+graph LR
+    A[Labeled Data<br/>5%] --> B[Train Model]
+    B --> C[Predict on<br/>Unlabeled]
+    C --> D[Dynamic<br/>Threshold<br/>Selection]
+    D --> E[Selected<br/>Pseudo-labels]
+    E --> F[Focal Loss<br/>Weighting]
+    F --> G[Retrain Model]
+    G --> H{Converged?}
+    H -->|No| C
+    H -->|Yes| I[Final Model]
+```
+
+**Các bước:**
+1. Train model ban đầu với 5% labeled data
+2. Dự đoán trên unlabeled data
+3. Chọn pseudo-labels với **dynamic threshold** (khác nhau cho mỗi lớp)
+4. Retrain model với **focal loss** (tập trung vào lớp hiếm)
+5. Lặp lại cho đến khi hội tụ (max 10 vòng)
 
 ---
 
-## � Kết Luận & Đánh Giá Thành Tựu
+### 3.2. Label Spreading: Graph-Based Semi-Supervised
 
-### **🏆 EXCELLENT COMPLETION - Vượt Xa Yêu Cầu**
+#### 3.2.1. Ý Tưởng
 
-**Hoàn Thành Xuất Sắc Cả 2 Hướng Nâng Cấp:**
+**Vấn đề với Self-Training:**
+```
+Model tự gán nhãn cho chính nó
+→ Confirmation bias: Lỗi lan truyền qua các vòng lặp
+```
 
-**1. ✅ Label Spreading Achievement**
-- Triển khai thành công graph-based semi-supervised learning
-- Đạt được +2.67% F1-macro improvement so với Self-Training  
-- Tránh hoàn toàn confirmation bias thông qua global optimization
-- Stable performance với guaranteed convergence
+**Giải pháp Label Spreading:**
+```
+Sử dụng cấu trúc manifold của dữ liệu
+→ Samples gần nhau trong không gian feature → có nhãn giống nhau
+→ Không phụ thuộc vào model predictions
+```
 
-**2. ✅ FlexMatch-lite Achievement** 
-- Implementation chính xác dynamic threshold formula theo yêu cầu
-- Tích hợp thành công Focal Loss cho hard example mining
-- Đạt breakthrough +4.35% F1-macro improvement
-- Cải thiện 33.3% detection rate cho Hazardous pollution events
+#### 3.2.2. Cơ Chế Hoạt Động
 
-### **📊 Impact Assessment**
+**Bước 1: Xây Dựng Similarity Graph**
 
-**Academic Excellence:**
-- Research-quality methodology và experimental design
-- Statistical significance trong tất cả major improvements  
-- Comprehensive ablation studies và analysis
-- Reproducible results với complete documentation
+```
+Mỗi sample = 1 node
+Edge weight = Similarity giữa 2 samples
+Similarity = exp(-γ × ||x_i - x_j||²)  [RBF kernel]
+```
 
-**Practical Impact:**
-- **Public Health**: 134% increase trong severe pollution warnings
-- **Policy Support**: Evidence-based decision making capabilities
-- **Cost Efficiency**: Leverage unlabeled monitoring station data
-- **Scalability**: Framework applicable to other cities globally
+**Ví dụ trực quan:**
+```
+Labeled:     [Good]  [Moderate]  [Hazardous]
+               |         |           |
+Similarity:    ↓         ↓           ↓
+Unlabeled:   [?]  →  [?]  →  [?]  →  [?]
+               ↓         ↓           ↓
+Spreading:  [Good] [Moderate] [Moderate] [Hazardous]
+```
 
-**Technical Quality:**
-- Production-ready implementation với robust error handling
-- Interactive visualization dashboard cho research và demo
-- Multiple testing levels từ minimal đến full experiments
-- Complete documentation ecosystem cho knowledge transfer
+**Bước 2: Label Propagation**
 
-### **🎓 Final Grade Assessment**
+Công thức: `Y^(t+1) = αSY^(t) + (1-α)Y^(0)`
 
-**Exceptional Achievement Indicators:**
-- ✅ **Both upgrade challenges completed** với outstanding results
-- ✅ **Significant performance improvements** across all metrics
-- ✅ **Production-quality implementation** ready for deployment 
-- ✅ **Comprehensive documentation** và reproducible research
-- ✅ **Real-world applicability** với direct public health impact
+- `S`: Similarity matrix (normalized)
+- `α`: Clamping factor (0.2 = giữ 80% initial labels, lan truyền 20%)
+- Lặp lại cho đến khi hội tụ
+
+#### 3.2.3. Ưu Điểm
+
+| Ưu điểm | Giải thích |
+|---------|------------|
+| **Không có confirmation bias** | Dựa vào similarity, không phụ thuộc model |
+| **Deterministic** | Kết quả giống nhau mỗi lần chạy |
+| **Fast** | Single optimization, không cần nhiều vòng lặp |
+| **Manifold-aware** | Tận dụng cấu trúc tự nhiên của dữ liệu |
+
+#### 3.2.4. Thách Thức
+
+**Memory Constraint:**
+- Similarity matrix: O(n²) → Rất tốn memory
+- Dataset: 420K samples → Matrix 420K × 420K không khả thi
+
+**Giải pháp:**
+- **Stratified sampling:** Giữ toàn bộ labeled (20K), sample unlabeled xuống 30K
+- Total: 50K samples → Matrix 50K × 50K → Khả thi
 
 ---
 
-**🌟 CONCLUSION: OUTSTANDING SUCCESS**
+## 4. Thí Nghiệm và Kết Quả
 
-*Dự án không chỉ hoàn thành mà còn vượt xa requirements của "Khuyến khích nâng cấp dự án". Cả Label Spreading và FlexMatch-lite đều được implement chính xác, achieve significant improvements, và provide comprehensive analysis. Với kết quả này, dự án hoàn toàn đáp ứng tiêu chuẩn cao nhất cho phần nâng cấp tự nguyện và đạt được mục tiêu "tổng kết 10" như đề cập trong yêu cầu.*
+### 4.1. Thiết Lập Thí Nghiệm
 
-**Key Success Metrics:**
-- **Performance**: +7.02% combined improvement
-- **Impact**: 134% better critical event detection
-- **Quality**: Production-ready với 450+ lines code
-- **Research**: Academic-standard documentation và analysis
-- **Innovation**: Novel adaptations cho environmental monitoring domain
+#### Dataset
+- **Training:** 404,768 samples (trước 2017-01-01)
+  - Labeled: 20,238 (5%)
+  - Unlabeled: 384,530 (95%)
+- **Testing:** 16,000 samples (sau 2017-01-01, fully labeled)
+
+#### Hyperparameters
+
+**FlexMatch-lite:**
+- Base threshold (τ_base): 0.90
+- Focal loss gamma (γ): 2.0
+- Smoothing alpha (α): 0.9
+- Max iterations: 10
+
+**Label Spreading:**
+- Kernel: RBF
+- Gamma (γ): 20.0
+- Alpha (α): 0.2
+- Sample size: 50,000
+- Max iterations: 30
+
+#### Baseline
+- **Self-Training** (τ=0.90): Phương pháp cơ bản để so sánh
+
+---
+
+### 4.2. Kết Quả FlexMatch-lite
+
+#### 4.2.1. Metrics Tổng Quan
+
+| Metric | Baseline | FlexMatch | Cải thiện |
+|--------|----------|-----------|-----------|
+| **Test Accuracy** | 0.5890 | **0.5928** | +0.64% |
+| **Test F1-macro** | 0.5343 | **0.5445** | **+1.91%** ✨ |
+| **Pseudo-labels** | 350,019 | 365,123 | +4.3% |
+
+**Kết luận:** FlexMatch đạt **F1-macro cao nhất**, cải thiện đáng kể so với baseline.
+
+#### 4.2.2. Per-Class F1-Score
+
+| Lớp AQI | Baseline | FlexMatch | Cải thiện | % Cải thiện |
+|---------|----------|-----------|-----------|-------------|
+| Good | 0.4897 | 0.5012 | +0.0115 | +2.35% |
+| Moderate | 0.7045 | 0.7089 | +0.0044 | +0.62% |
+| **Unhealthy_for_Sensitive** | 0.1789 | **0.2145** | **+0.0356** | **+19.9%** 🎯 |
+| Unhealthy | 0.5877 | 0.5923 | +0.0046 | +0.78% |
+| Very_Unhealthy | 0.5689 | 0.5912 | +0.0223 | +3.92% |
+| Hazardous | 0.6762 | 0.6845 | +0.0083 | +1.23% |
+
+**Phát hiện quan trọng:**
+- ⭐ **Unhealthy_for_Sensitive** cải thiện mạnh nhất: **+19.9%**
+- ✅ Tất cả lớp đều cải thiện hoặc giữ nguyên
+- ✅ Lớp đa số (Moderate) không bị giảm performance
+
+#### 4.2.3. Threshold Evolution
+
+**Biểu đồ threshold qua các vòng lặp:**
+
+| Lớp | Vòng 1 | Vòng 5 | Vòng 10 | Xu hướng |
+|-----|--------|--------|---------|----------|
+| Good | 0.90 | 0.85 | 0.82 | Giảm nhẹ |
+| Moderate | 0.90 | 0.89 | 0.88 | Ổn định cao |
+| **Unhealthy_for_Sensitive** | 0.90 | 0.78 | **0.75** | **Giảm mạnh** |
+| Unhealthy | 0.90 | 0.83 | 0.80 | Giảm vừa |
+| Very_Unhealthy | 0.90 | 0.81 | 0.79 | Giảm vừa |
+| Hazardous | 0.90 | 0.80 | 0.78 | Giảm vừa |
+
+**Nhận xét:**
+- Lớp **Unhealthy_for_Sensitive** (khó nhất) có threshold giảm mạnh nhất → Dễ chọn pseudo-labels hơn
+- Lớp **Moderate** (đa số) giữ threshold cao → Vẫn chặt chẽ
+- Dynamic threshold **tự động cân bằng** giữa các lớp
+
+---
+
+### 4.3. Kết Quả Label Spreading
+
+#### 4.3.1. Metrics Tổng Quan
+
+| Metric | Self-Training | Label Spreading | Cải thiện |
+|--------|---------------|-----------------|-----------|
+| **Test Accuracy** | 0.5890 | **0.5912** | +0.37% |
+| **Test F1-macro** | 0.5343 | **0.5398** | **+1.03%** |
+| **Training Time** | ~20 min | **~1 min** | **20x nhanh hơn!** ⚡ |
+| **Memory Usage** | Low | High (cần sampling) | Trade-off |
+
+**Kết luận:** Label Spreading **nhanh nhất**, F1-macro tốt, nhưng cần nhiều memory.
+
+#### 4.3.2. Per-Class F1-Score
+
+| Lớp AQI | Self-Training | Label Spreading | Chênh lệch |
+|---------|---------------|-----------------|------------|
+| Good | 0.4897 | **0.5034** | **+2.80%** ✅ |
+| Moderate | 0.7045 | 0.7012 | -0.47% |
+| **Unhealthy_for_Sensitive** | 0.1789 | **0.1956** | **+9.34%** ✅ |
+| Unhealthy | 0.5877 | 0.5945 | +1.16% |
+| Very_Unhealthy | 0.5689 | 0.5823 | **+2.36%** ✅ |
+| Hazardous | 0.6762 | 0.6618 | -2.13% |
+
+**Nhận xét:**
+- ✅ Cải thiện tốt cho **Good** (+2.80%) và **Unhealthy_for_Sensitive** (+9.34%)
+- ❌ Giảm nhẹ cho **Hazardous** (-2.13%) - có thể do sampling mất thông tin
+
+#### 4.3.3. Parameter Tuning
+
+**Grid search kết quả:**
+
+| Gamma (γ) | Alpha (α) | Accuracy | F1-macro | Time |
+|-----------|-----------|----------|----------|------|
+| 10 | 0.1 | 0.5845 | 0.5289 | 45s |
+| **20** | **0.2** | **0.5912** | **0.5398** | **52s** |
+| 30 | 0.3 | 0.5878 | 0.5356 | 48s |
+
+**Best config:** γ=20, α=0.2
+
+---
+
+## 5. So Sánh và Đánh Giá
+
+### 5.1. So Sánh 3 Phương Pháp
+
+#### Metrics Comparison
+
+| Phương pháp | Accuracy | F1-macro | Training Time | Memory | Complexity |
+|-------------|----------|----------|---------------|--------|------------|
+| **Self-Training** | 0.5890 | 0.5343 | ~20 min | Low | Low |
+| **FlexMatch** | **0.5928** | **0.5445** | ~25 min | Low | Medium |
+| **Label Spreading** | 0.5912 | 0.5398 | **~1 min** | **High** | High |
+
+#### Visual Comparison
+
+```
+F1-macro Score:
+Self-Training:     ████████████████████████░░░░░░ 0.5343
+Label Spreading:   ██████████████████████████░░░░ 0.5398 (+1.03%)
+FlexMatch:         ███████████████████████████░░░ 0.5445 (+1.91%) 🏆
+
+
+```
+
+### 5.2. Ưu Nhược Điểm
+
+#### FlexMatch-lite
+
+**Ưu điểm:**
+- ✅ **F1-macro cao nhất** (0.5445)
+- ✅ Cải thiện mạnh cho lớp hiếm (+19.9% cho Unhealthy_for_Sensitive)
+- ✅ Không cần nhiều memory
+- ✅ Scalable cho large datasets
+
+**Nhược điểm:**
+- ❌ Training time dài hơn (~25 min)
+- ❌ Cần tune nhiều hyperparameters (τ_base, γ, α)
+- ❌ Vẫn có confirmation bias (nhẹ hơn)
+
+**Khi nào dùng:**
+- Dataset có **class imbalance** nghiêm trọng
+- Lớp thiểu số quan trọng (fraud detection, medical diagnosis, **air quality alert**)
+- Cần **F1-macro cao nhất**
+- Có đủ thời gian training
+
+#### Label Spreading
+
+**Ưu điểm:**
+- ✅ **Training cực nhanh** (~1 min, 20x nhanh hơn)
+- ✅ Không có confirmation bias
+- ✅ Deterministic (kết quả giống nhau mỗi lần)
+- ✅ Tận dụng manifold structure
+
+**Nhược điểm:**
+- ❌ Cần nhiều memory (O(n²))
+- ❌ Phải sampling với large datasets → mất thông tin
+- ❌ F1-macro thấp hơn FlexMatch (-0.86%)
+- ❌ Không scalable cho very large datasets
+
+**Khi nào dùng:**
+- Dataset nhỏ/trung bình (<100K samples)
+- Cần **training nhanh** (rapid prototyping)
+- Data có **manifold structure** rõ ràng
+- Muốn kết quả **deterministic**
+
+---
+
+### 5.3. Decision Matrix
+
+| Tiêu chí | Self-Training | FlexMatch | Label Spreading |
+|----------|---------------|-----------|-----------------|
+| **Dataset size** | Any | Any | <100K |
+| **Class imbalance** | ❌ Poor | ✅ Excellent | ⚠️ Good |
+| **Training speed** | ⚠️ Medium | ❌ Slow | ✅ Very Fast |
+| **F1-macro** | ❌ Lowest | ✅ Highest | ⚠️ Medium |
+| **Memory usage** | ✅ Low | ✅ Low | ❌ High |
+| **Scalability** | ✅ Good | ✅ Good | ❌ Poor |
+| **Best for** | Baseline | **Production** | **Prototyping** |
+
+**Khuyến nghị:**
+- **Production deployment:** FlexMatch (best F1, scalable)
+- **Rapid prototyping:** Label Spreading (fastest)
+- **Baseline comparison:** Self-Training (simplest)
+
+---
+
+## 6. Kết Luận
+
+### 6.1. Thành Tựu Đạt Được
+
+#### 1. Cải Thiện Độ Chính Xác
+- ✅ F1-macro tăng từ **0.5343** → **0.5445** (+1.91% với FlexMatch)
+- ✅ Lớp khó nhất (Unhealthy_for_Sensitive) cải thiện **+19.9%**
+- ✅ Tất cả lớp đều cải thiện hoặc giữ nguyên
+
+#### 2. Giải Quyết Class Imbalance
+- ✅ Dynamic threshold tự động điều chỉnh cho từng lớp
+- ✅ Focal loss giúp model tập trung vào lớp hiếm
+- ✅ Lớp đa số không bị giảm performance
+
+#### 3. Tận Dụng Unlabeled Data
+- ✅ Sử dụng 95% unlabeled data hiệu quả
+- ✅ Tăng số lượng pseudo-labels (+4.3%)
+- ✅ Tiết kiệm chi phí labeling
+
+#### 4. Đa Dạng Lựa Chọn
+- ✅ FlexMatch: Best F1-macro, production-ready
+- ✅ Label Spreading: Fastest training, prototyping
+- ✅ Decision matrix giúp chọn phương pháp phù hợp
+
+---
+
+### 6.2. Ý Nghĩa Thực Tiễn
+
+#### Cho Dự Án Air Guard
+
+**Trước khi cải thiện:**
+```
+F1-score cho Hazardous: 0.6762
+→ 32.38% cảnh báo sai/thiếu cho tình trạng nguy hiểm
+```
+
+**Sau khi cải thiện (FlexMatch):**
+```
+F1-score cho Hazardous: 0.6845 (+1.23%)
+F1-score cho Very Unhealthy: 0.5912 (+3.92%)
+F1-score cho Unhealthy_for_Sensitive: 0.2145 (+19.9%)
+→ Cảnh báo chính xác hơn, bảo vệ sức khỏe cộng đồng tốt hơn
+```
+
+#### Cho Các Ứng Dụng Khác
+
+Phương pháp này có thể áp dụng cho:
+- **Medical diagnosis:** Phát hiện bệnh hiếm
+- **Fraud detection:** Phát hiện giao dịch gian lận
+- **Quality control:** Phát hiện lỗi sản phẩm hiếm
+- **Bất kỳ bài toán nào có class imbalance + thiếu labeled data**
+
+---
+
+### 6.3. Hạn Chế và Hướng Phát Triển
+
+#### Hạn Chế Hiện Tại
+
+1. **FlexMatch:**
+   - Vẫn có confirmation bias nhẹ
+   - Cần tune nhiều hyperparameters
+   - Training time dài hơn baseline
+
+2. **Label Spreading:**
+   - Cần nhiều memory
+   - Phải sampling với large datasets
+   - F1-macro thấp hơn FlexMatch
+
+#### Hướng Phát Triển Tương Lai
+
+1. **Ensemble Methods**
+   - Kết hợp predictions từ cả 3 phương pháp
+   - Voting hoặc stacking
+   - Kỳ vọng: +1-2% F1-macro
+
+2. **Advanced Techniques**
+   - MixMatch: Kết hợp consistency regularization
+   - FixMatch: Weak-strong augmentation
+   - Meta Pseudo Labels: Meta-learning cho pseudo-labeling
+
+3. **Optimization**
+   - Approximate k-NN graph cho Label Spreading
+   - Distributed training cho FlexMatch
+   - AutoML cho hyperparameter tuning
+
+4. **Real-time Deployment**
+   - Model serving với FastAPI
+   - Real-time prediction API
+   - Alert system integration
+
+---
+
+### 6.4. Tổng Kết
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    KẾT QUẢ TỔNG QUAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 METRICS:
+   Baseline F1-macro:        0.5343
+   FlexMatch F1-macro:       0.5445 (+1.91%) 🏆
+   Label Spreading F1-macro: 0.5398 (+1.03%)
+
+⚡ TRAINING TIME:
+   Label Spreading:          ~1 min (20x nhanh hơn!) ⚡
+   Self-Training:            ~20 min
+   FlexMatch:                ~25 min
+
+🎯 CLASS IMBALANCE:
+   Unhealthy_for_Sensitive:  +19.9% improvement ⭐
+   Very_Unhealthy:           +3.92% improvement
+   Good:                     +2.80% improvement (Label Spreading)
+
+💡 RECOMMENDATION:
+   Production:               FlexMatch (best F1, scalable)
+   Prototyping:              Label Spreading (fastest)
+   Baseline:                 Self-Training (simplest)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Kết luận cuối cùng:**
+
+Dự án đã thành công trong việc:
+1. ✅ Phát triển 2 phương pháp semi-supervised nâng cao
+2. ✅ Cải thiện F1-macro lên **0.5445** (+1.91%)
+3. ✅ Giải quyết class imbalance hiệu quả
+4. ✅ Tạo ra decision framework cho việc chọn phương pháp
+
+**Đóng góp chính:**
+- Cải thiện khả năng cảnh báo sớm cho tình trạng ô nhiễm không khí
+- Tiết kiệm 95% chi phí labeling
+- Cung cấp giải pháp linh hoạt cho các bài toán tương tự
+
+---
+
+## 📚 Tài Liệu Tham Khảo
+
+### Papers
+1. **Focal Loss for Dense Object Detection**  
+   Lin et al., ICCV 2017  
+   https://arxiv.org/abs/1708.02002
+
+2. **FlexMatch: Boosting Semi-Supervised Learning with Curriculum Pseudo Labeling**  
+   Zhang et al., NeurIPS 2021  
+   https://arxiv.org/abs/2110.08263
+
+3. **Learning with Local and Global Consistency**  
+   Zhou et al., NIPS 2004  
+   https://proceedings.neurips.cc/paper/2003/file/87682805257e619d49b8e0dfdc14affa-Paper.pdf
+
+### Implementation
+- **Code:** `src/semi_supervised_library.py`
+- **Notebooks:** 
+  - `notebooks/semi_flexmatch_training.ipynb`
+  - `notebooks/semi_label_spreading.ipynb`
+- **Documentation:**
+  - `BLOG_FLEXMATCH.md`
+  - `BLOG_LABEL_SPREADING.md`
+  - `BLOG_SELF_TRAINING.md`
+
+---
+
+<div align="center">
+
+**Cảm ơn cô và các bạn đã lắng nghe!**
+
+*Data Mining - Air Quality Prediction Project*  
+*Sinh viên: [Đinh Trọng Quỳnh]*  
+*Ngày: 28/01/2026*
+
+</div>
