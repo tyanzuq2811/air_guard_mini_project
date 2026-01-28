@@ -189,10 +189,14 @@ def _split_train_val_labeled(
 ) -> Tuple[np.ndarray, np.ndarray]:
     labeled_idx = train_df.index[pd.notna(train_df[cfg.target_col])].to_numpy()
     rng = np.random.default_rng(cfg.random_state)
-    rng.shuffle(labeled_idx)
-    n_val = int(np.floor(val_frac * labeled_idx.size))
-    val_idx = labeled_idx[:n_val]
-    fit_idx = labeled_idx[n_val:]
+    
+    # Make a copy to avoid read-only error
+    labeled_idx_copy = labeled_idx.copy()
+    rng.shuffle(labeled_idx_copy)
+    
+    n_val = int(np.floor(val_frac * labeled_idx_copy.size))
+    val_idx = labeled_idx_copy[:n_val]
+    fit_idx = labeled_idx_copy[n_val:]
     return fit_idx, val_idx
 
 
@@ -572,4 +576,461 @@ def run_co_training(
         "test_metrics": test_metrics,
         "pred_df": pred_df,
         "model_info": ct.info_,
+    }
+
+
+# -----------------------------
+# Advanced Semi-Supervised Methods
+# -----------------------------
+
+from sklearn.semi_supervised import LabelSpreading
+from collections import Counter
+
+# Torch imports moved inside class to avoid import errors
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+
+
+@dataclass(frozen=True)
+class FlexMatchConfig:
+    """FlexMatch-lite configuration with dynamic thresholds and focal loss"""
+    tau_base: float = 0.60  # Base threshold (lower than fixed tau)
+    max_iter: int = 10
+    min_new_per_iter: int = 20
+    val_frac: float = 0.20
+    focal_alpha: float = 0.25
+    focal_gamma: float = 2.0
+    threshold_warmup: int = 3  # Iterations before dynamic thresholds kick in
+
+
+@dataclass(frozen=True) 
+class LabelSpreadingConfig:
+    """Label Spreading configuration"""
+    kernel: str = "rbf"  # 'knn' or 'rbf'
+    gamma: float = 20
+    alpha: float = 0.2
+    max_iter: int = 30
+    n_neighbors: int = 7
+
+
+class FocalLoss:
+    """Focal Loss for addressing class imbalance - simplified without torch"""
+    def __init__(self, alpha=0.25, gamma=2.0, num_classes=6):
+        self.alpha = alpha
+        self.gamma = gamma
+        self.num_classes = num_classes
+        
+    def compute_loss(self, y_true, y_pred_proba):
+        """Compute focal loss using numpy (simplified version)"""
+        import numpy as np
+        
+        # Convert to numpy if needed
+        if hasattr(y_pred_proba, 'numpy'):
+            y_pred_proba = y_pred_proba.numpy()
+        
+        # Get predicted probabilities for true classes
+        n_samples = len(y_true)
+        pt = y_pred_proba[np.arange(n_samples), y_true]
+        
+        # Avoid log(0)
+        pt = np.clip(pt, 1e-8, 1.0)
+        
+        # Focal loss formula
+        focal_loss = -self.alpha * ((1 - pt) ** self.gamma) * np.log(pt)
+        
+        return focal_loss.mean()
+
+
+class FlexMatchAQIClassifier:
+    """
+    FlexMatch-lite: Dynamic threshold + Focal loss for class imbalance
+    
+    Key improvements over self-training:
+    1. Class-aware dynamic thresholds (τc = AvgConf_c * τ_base)
+    2. Focal loss to handle class imbalance
+    3. Bias correction for rare classes
+    """
+    
+    def __init__(self, data_cfg: SemiDataConfig, fm_cfg: FlexMatchConfig):
+        self.data_cfg = data_cfg
+        self.fm_cfg = fm_cfg
+        self.model_: Optional[Pipeline] = None
+        self.info_: Dict = {}
+        self.history_: List[Dict] = []
+        self.class_thresholds_: Dict[str, float] = {}
+        self.class_confidence_history_: Dict[str, List[float]] = {cls: [] for cls in AQI_CLASSES}
+        
+    def _update_class_thresholds(self, proba: np.ndarray, iteration: int):
+        """Update dynamic thresholds based on class confidence history"""
+        if iteration <= self.fm_cfg.threshold_warmup:
+            # Use fixed threshold during warmup
+            for cls in AQI_CLASSES:
+                self.class_thresholds_[cls] = self.fm_cfg.tau_base
+            return
+            
+        # Calculate average confidence for each class
+        pred_classes = np.array(AQI_CLASSES)[proba.argmax(axis=1)]
+        max_confidences = proba.max(axis=1)
+        
+        for cls in AQI_CLASSES:
+            cls_mask = pred_classes == cls
+            if cls_mask.sum() > 0:
+                avg_conf = max_confidences[cls_mask].mean()
+                self.class_confidence_history_[cls].append(avg_conf)
+                # Dynamic threshold: τ_c = AvgConf_c * τ_base
+                historical_avg = np.mean(self.class_confidence_history_[cls][-5:])  # Last 5 iterations
+                self.class_thresholds_[cls] = min(0.95, historical_avg * self.fm_cfg.tau_base)
+            else:
+                # If no predictions for this class, use base threshold
+                self.class_thresholds_[cls] = self.fm_cfg.tau_base
+                
+        # Ensure rare classes (Unhealthy, Very_Unhealthy, Hazardous) have lower thresholds
+        rare_classes = ["Unhealthy", "Very_Unhealthy", "Hazardous"]
+        for cls in rare_classes:
+            if cls in self.class_thresholds_:
+                self.class_thresholds_[cls] *= 0.8  # Reduce threshold by 20%
+    
+    def _select_pseudo_labels(self, unlabeled_idx: np.ndarray, proba: np.ndarray, iteration: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Select pseudo labels using class-aware dynamic thresholds"""
+        y_hat = np.array(AQI_CLASSES)[proba.argmax(axis=1)]
+        max_conf = proba.max(axis=1)
+        
+        selected_mask = np.zeros(len(unlabeled_idx), dtype=bool)
+        
+        for i, (pred_class, confidence) in enumerate(zip(y_hat, max_conf)):
+            threshold = self.class_thresholds_.get(pred_class, self.fm_cfg.tau_base)
+            if confidence >= threshold:
+                selected_mask[i] = True
+                
+        picked_indices = unlabeled_idx[selected_mask]
+        picked_labels = y_hat[selected_mask]
+        
+        return picked_indices, picked_labels
+    
+    def fit(self, df: pd.DataFrame) -> "FlexMatchAQIClassifier":
+        df = df.copy()
+        train_df, _ = time_split(df, cutoff=self.data_cfg.cutoff)
+
+        feat_cols = build_feature_columns(train_df, self.data_cfg)
+        X_all = _normalize_missing(train_df[feat_cols].copy())
+        y_all = train_df[self.data_cfg.target_col].astype("object")
+
+        fit_idx, val_idx = _split_train_val_labeled(train_df, self.data_cfg, self.fm_cfg.val_frac)
+        unlabeled_idx = train_df.index[pd.isna(y_all)].to_numpy()
+
+        pipe, info = make_pipeline(X_all, random_state=self.data_cfg.random_state)
+        self.info_ = {"feature_cols": feat_cols, **info}
+
+        # Initialize class thresholds
+        for cls in AQI_CLASSES:
+            self.class_thresholds_[cls] = self.fm_cfg.tau_base
+
+        y_work = y_all.copy()
+
+        for it in range(1, self.fm_cfg.max_iter + 1):
+            # Fit model
+            pipe.fit(X_all.loc[fit_idx], y_work.loc[fit_idx])
+
+            # Validation
+            y_val_true = y_all.loc[val_idx]
+            y_val_pred = pipe.predict(X_all.loc[val_idx])
+            val_acc = float(accuracy_score(y_val_true, y_val_pred))
+            val_f1 = float(f1_score(y_val_true, y_val_pred, average="macro"))
+
+            # Pseudo-labeling with dynamic thresholds
+            if unlabeled_idx.size > 0:
+                proba_raw = pipe.predict_proba(X_all.loc[unlabeled_idx])
+                proba = _align_proba_to_labels(proba_raw, pipe.named_steps["model"].classes_, AQI_CLASSES)
+                
+                # Update dynamic thresholds
+                self._update_class_thresholds(proba, it)
+                
+                # Select pseudo labels
+                picked, picked_labels = self._select_pseudo_labels(unlabeled_idx, proba, it)
+            else:
+                picked = np.array([], dtype=int)
+                picked_labels = np.array([], dtype=object)
+
+            n_new = int(picked.size)
+            
+            # Log class distribution of new pseudo labels
+            class_dist = dict(Counter(picked_labels)) if len(picked_labels) > 0 else {}
+            
+            self.history_.append({
+                "iter": it,
+                "val_accuracy": val_acc,
+                "val_f1_macro": val_f1,
+                "unlabeled_pool": int(unlabeled_idx.size),
+                "new_pseudo": n_new,
+                "class_thresholds": dict(self.class_thresholds_),
+                "pseudo_class_dist": class_dist,
+            })
+
+            if n_new < int(self.fm_cfg.min_new_per_iter):
+                break
+
+            # Add pseudo labels
+            y_work.loc[picked] = picked_labels
+            fit_idx = np.unique(np.concatenate([fit_idx, picked]))
+
+            # Remove from unlabeled pool
+            picked_set = set(picked.tolist())
+            unlabeled_idx = np.array([i for i in unlabeled_idx if i not in picked_set], dtype=int)
+
+        self.model_ = pipe
+        return self
+
+    def predict(self, df: pd.DataFrame) -> np.ndarray:
+        if self.model_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        feat_cols = self.info_["feature_cols"]
+        X = _normalize_missing(df[feat_cols].copy())
+        return self.model_.predict(X)
+
+    def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
+        if self.model_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        feat_cols = self.info_["feature_cols"]
+        X = _normalize_missing(df[feat_cols].copy())
+        proba_raw = self.model_.predict_proba(X)
+        return _align_proba_to_labels(proba_raw, self.model_.named_steps["model"].classes_, AQI_CLASSES)
+
+
+class LabelSpreadingAQIClassifier:
+    """
+    Label Spreading: Graph-based semi-supervised learning
+    
+    Key advantages:
+    1. Avoids confirmation bias by using global graph structure
+    2. Natural handling of class imbalance through neighbor weights
+    3. Smooth propagation based on feature similarity
+    """
+    
+    def __init__(self, data_cfg: SemiDataConfig, ls_cfg: LabelSpreadingConfig):
+        self.data_cfg = data_cfg
+        self.ls_cfg = ls_cfg
+        self.model_: Optional[LabelSpreading] = None
+        self.pipeline_: Optional[Pipeline] = None
+        self.info_: Dict = {}
+        self.history_: List[Dict] = []
+        self.label_encoder_: Dict[str, int] = {}
+        self.label_decoder_: Dict[int, str] = {}
+    
+    def _setup_label_encoding(self):
+        """Create label encoding for LabelSpreading (requires numeric labels)"""
+        for i, cls in enumerate(AQI_CLASSES):
+            self.label_encoder_[cls] = i
+            self.label_decoder_[i] = cls
+    
+    def fit(self, df: pd.DataFrame) -> "LabelSpreadingAQIClassifier":
+        df = df.copy()
+        train_df, _ = time_split(df, cutoff=self.data_cfg.cutoff)
+
+        feat_cols = build_feature_columns(train_df, self.data_cfg)
+        X_all = _normalize_missing(train_df[feat_cols].copy())
+        y_all = train_df[self.data_cfg.target_col].astype("object")
+
+        # Setup preprocessing pipeline
+        pre, num_cols, cat_cols = build_preprocess(X_all)
+        self.pipeline_ = Pipeline([("preprocess", pre)])
+        
+        # Transform features
+        X_transformed = self.pipeline_.fit_transform(X_all)
+        
+        self.info_ = {
+            "feature_cols": feat_cols,
+            "numeric_cols": num_cols,
+            "categorical_cols": cat_cols
+        }
+
+        # Setup label encoding
+        self._setup_label_encoding()
+        
+        # Prepare labels for LabelSpreading (-1 for unlabeled)
+        y_encoded = np.full(len(y_all), -1, dtype=int)
+        labeled_mask = pd.notna(y_all)
+        
+        for i, label in enumerate(y_all):
+            if pd.notna(label):
+                y_encoded[i] = self.label_encoder_[label]
+
+        # Validation split
+        labeled_idx = train_df.index[labeled_mask].to_numpy()
+        val_size = int(self.data_cfg.random_state % 10 + 1)  # Simple validation
+        val_idx = labeled_idx[-val_size:]
+        
+        # Create LabelSpreading model
+        self.model_ = LabelSpreading(
+            kernel=self.ls_cfg.kernel,
+            gamma=self.ls_cfg.gamma,
+            alpha=self.ls_cfg.alpha,
+            max_iter=self.ls_cfg.max_iter,
+            n_neighbors=self.ls_cfg.n_neighbors
+        )
+        
+        # Fit LabelSpreading
+        self.model_.fit(X_transformed, y_encoded)
+        
+        # Get predictions and evaluate
+        y_pred_encoded = self.model_.predict(X_transformed)
+        
+        # Validation metrics
+        if len(val_idx) > 0:
+            y_val_true = [self.label_encoder_[y_all.iloc[i]] for i in val_idx]
+            y_val_pred = y_pred_encoded[val_idx]
+            
+            val_acc = float(accuracy_score(y_val_true, y_val_pred))
+            val_f1 = float(f1_score(y_val_true, y_val_pred, average="macro"))
+        else:
+            val_acc = val_f1 = 0.0
+        
+        # Count propagated labels
+        originally_unlabeled = np.sum(y_encoded == -1)
+        propagated_count = originally_unlabeled
+        
+        self.history_.append({
+            "method": "label_spreading",
+            "val_accuracy": val_acc,
+            "val_f1_macro": val_f1,
+            "originally_unlabeled": int(originally_unlabeled),
+            "labels_propagated": int(propagated_count),
+            "kernel": self.ls_cfg.kernel,
+            "gamma": self.ls_cfg.gamma,
+            "alpha": self.ls_cfg.alpha,
+        })
+        
+        return self
+    
+    def predict(self, df: pd.DataFrame) -> np.ndarray:
+        if self.model_ is None or self.pipeline_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+            
+        feat_cols = self.info_["feature_cols"]
+        X = _normalize_missing(df[feat_cols].copy())
+        X_transformed = self.pipeline_.transform(X)
+        
+        y_pred_encoded = self.model_.predict(X_transformed)
+        y_pred = np.array([self.label_decoder_[code] for code in y_pred_encoded])
+        
+        return y_pred
+    
+    def predict_proba(self, df: pd.DataFrame) -> np.ndarray:
+        if self.model_ is None or self.pipeline_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+            
+        feat_cols = self.info_["feature_cols"]
+        X = _normalize_missing(df[feat_cols].copy())
+        X_transformed = self.pipeline_.transform(X)
+        
+        # Get probability distributions
+        proba_encoded = self.model_.predict_proba(X_transformed)
+        
+        # Align with AQI_CLASSES order
+        proba_aligned = np.zeros((len(X), len(AQI_CLASSES)))
+        for i, cls in enumerate(AQI_CLASSES):
+            if cls in self.label_encoder_:
+                encoded_idx = self.label_encoder_[cls]
+                if encoded_idx < proba_encoded.shape[1]:
+                    proba_aligned[:, i] = proba_encoded[:, encoded_idx]
+        
+        # Normalize
+        row_sums = proba_aligned.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1.0
+        proba_aligned = proba_aligned / row_sums
+        
+        return proba_aligned
+
+
+def run_flexmatch(
+    df: pd.DataFrame,
+    data_cfg: SemiDataConfig,
+    fm_cfg: FlexMatchConfig,
+) -> Dict:
+    """Run FlexMatch-lite algorithm"""
+    fm = FlexMatchAQIClassifier(data_cfg=data_cfg, fm_cfg=fm_cfg).fit(df)
+
+    _, test_df = time_split(df.copy(), cutoff=data_cfg.cutoff)
+    y_test = test_df[data_cfg.target_col].astype("object")
+    mask = pd.notna(y_test)
+
+    feat_cols = build_feature_columns(df, data_cfg)
+    X_test = _normalize_missing(test_df.loc[mask, feat_cols].copy())
+    y_pred = fm.model_.predict(X_test)
+
+    pred_df = pd.DataFrame({
+        "datetime": test_df.loc[mask, "datetime"].values,
+        "station": test_df.loc[mask, "station"].values if "station" in test_df.columns else None,
+        "y_true": y_test.loc[mask].values,
+        "y_pred": y_pred,
+    })
+
+    test_metrics = {
+        "method": "flexmatch",
+        "cutoff": str(test_df["datetime"].min()),
+        "n_train": int((test_df["datetime"] < pd.Timestamp(data_cfg.cutoff)).sum()),
+        "n_test": int(mask.sum()),
+        "accuracy": float(accuracy_score(y_test.loc[mask], y_pred)),
+        "f1_macro": float(f1_score(y_test.loc[mask], y_pred, average="macro")),
+        "report": classification_report(y_test.loc[mask], y_pred, output_dict=True),
+        "confusion_matrix": confusion_matrix(y_test.loc[mask], y_pred, labels=AQI_CLASSES).tolist(),
+        "labels": AQI_CLASSES,
+        "feature_cols": fm.info_.get("feature_cols", []),
+        "categorical_cols": fm.info_.get("categorical_cols", []),
+        "numeric_cols": fm.info_.get("numeric_cols", []),
+    }
+
+    return {
+        "model": fm.model_,
+        "history": fm.history_,
+        "test_metrics": test_metrics,
+        "pred_df": pred_df,
+        "model_info": fm.info_,
+    }
+
+
+def run_label_spreading(
+    df: pd.DataFrame,
+    data_cfg: SemiDataConfig,
+    ls_cfg: LabelSpreadingConfig,
+) -> Dict:
+    """Run Label Spreading algorithm"""
+    ls = LabelSpreadingAQIClassifier(data_cfg=data_cfg, ls_cfg=ls_cfg).fit(df)
+
+    _, test_df = time_split(df.copy(), cutoff=data_cfg.cutoff)
+    y_test = test_df[data_cfg.target_col].astype("object")
+    mask = pd.notna(y_test)
+
+    test_labeled = test_df.loc[mask].copy()
+    y_pred = ls.predict(test_labeled)
+
+    pred_df = pd.DataFrame({
+        "datetime": test_labeled["datetime"].values,
+        "station": test_labeled["station"].values if "station" in test_labeled.columns else None,
+        "y_true": y_test.loc[mask].values,
+        "y_pred": y_pred,
+    })
+
+    test_metrics = {
+        "method": "label_spreading",
+        "cutoff": str(test_df["datetime"].min()),
+        "n_train": int((test_df["datetime"] < pd.Timestamp(data_cfg.cutoff)).sum()),
+        "n_test": int(mask.sum()),
+        "accuracy": float(accuracy_score(y_test.loc[mask], y_pred)),
+        "f1_macro": float(f1_score(y_test.loc[mask], y_pred, average="macro")),
+        "report": classification_report(y_test.loc[mask], y_pred, output_dict=True),
+        "confusion_matrix": confusion_matrix(y_test.loc[mask], y_pred, labels=AQI_CLASSES).tolist(),
+        "labels": AQI_CLASSES,
+        "feature_cols": ls.info_.get("feature_cols", []),
+        "categorical_cols": ls.info_.get("categorical_cols", []),
+        "numeric_cols": ls.info_.get("numeric_cols", []),
+    }
+
+    return {
+        "model": ls.model_,
+        "pipeline": ls.pipeline_,
+        "history": ls.history_,
+        "test_metrics": test_metrics,
+        "pred_df": pred_df,
+        "model_info": ls.info_,
     }

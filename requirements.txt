@@ -8,3 +8,9 @@ papermill>=2.5
 ucimlrepo>=0.0.7
 nbformat>=5.9
 statsmodels>=0.14
+
+# Advanced Semi-Supervised Learning
+torch>=2.0.0
+plotly>=5.0
+seaborn>=0.12
+streamlit>=1.28
