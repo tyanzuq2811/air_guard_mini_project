@@ -283,7 +283,7 @@ try:
         
         st.dataframe(
             iteration_df.style.background_gradient(subset=['Avg Val F1'], cmap='RdYlGn'),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -346,14 +346,14 @@ try:
         with col1:
             img_path = EXP_DIR / "learning_curves_by_strategy.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Learning Curves: Model A & Model B Validation F1", width='stretch')
+                st.image(str(img_path), caption="Learning Curves: Model A & Model B Validation F1", use_container_width=True)
             else:
                 st.warning("Image not found: learning_curves_by_strategy.png")
         
         with col2:
             img_path = EXP_DIR / "view_independence_analysis.png"
             if img_path.exists():
-                st.image(str(img_path), caption="View Independence Analysis (33.3% independent)", width='stretch')
+                st.image(str(img_path), caption="View Independence Analysis (33.3% independent)", use_container_width=True)
             else:
                 st.warning("Image not found: view_independence_analysis.png")
     
@@ -429,7 +429,7 @@ try:
                 'Test Accuracy': '{:.4f}',
                 'Test F1-Macro': '{:.4f}'
             }),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -455,7 +455,7 @@ try:
         # Visualization
         img_path = EXP_DIR / "comparison_with_baseline.png"
         if img_path.exists():
-            st.image(str(img_path), caption="Comparison: Co-Training vs Self-Training vs Baseline", width='stretch')
+            st.image(str(img_path), caption="Comparison: Co-Training vs Self-Training vs Baseline", use_container_width=True)
 
 except Exception as e:
     st.error(f"Lỗi load kết quả: {str(e)}")
@@ -669,3 +669,4 @@ st.markdown("""
     <p style='font-weight: 500; color: #ef4444;'>Yêu Cầu 2 Hoàn Thành | Co-Training THẤT BẠI | F1=0.4507 (-15.6% vs Self-Training) | Recommendation: Dùng Self-Training!</p>
 </div>
 """, unsafe_allow_html=True)
+

@@ -115,7 +115,7 @@ st.dataframe(
         lambda x: ['background-color: #fef3c7' if '⭐' in str(x['Experiment']) else '' for _ in x],
         axis=1
     ),
-    width='stretch',
+    use_container_width=True,
     hide_index=True
 )
 
@@ -173,7 +173,7 @@ with tab1:
                 lambda x: ['background-color: #d1fae5; font-weight: bold' if '⭐' in str(x['τ Value']) else '' for _ in x],
                 axis=1
             ),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -239,16 +239,16 @@ with tab1:
         with col1:
             img_path = exp_dir / "test_performance_comparison.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Test Performance: 3 τ values vs Baseline", width='stretch')
+                st.image(str(img_path), caption="Test Performance: 3 τ values vs Baseline", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "validation_f1_over_iterations.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Validation F1 Over Iterations", width='stretch')
+                st.image(str(img_path), caption="Validation F1 Over Iterations", use_container_width=True)
         
         img_path = exp_dir / "pseudo_labels_over_iterations.png"
         if img_path.exists():
-            st.image(str(img_path), caption="Pseudo-labels Per Iteration - τ=0.80 thêm nhiều nhất", width='stretch')
+            st.image(str(img_path), caption="Pseudo-labels Per Iteration - τ=0.80 thêm nhiều nhất", use_container_width=True)
         
         st.success("""
         **✅ Kết Luận Experiment 1:**
@@ -297,7 +297,7 @@ with tab2:
                 lambda x: ['background-color: #d1fae5; font-weight: bold' if '⭐' in str(x['Labeled %']) else '' for _ in x],
                 axis=1
             ),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -363,24 +363,24 @@ with tab2:
         with col1:
             img_path = exp_dir / "test_performance_comparison.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Test Performance by Labeled Size", width='stretch')
+                st.image(str(img_path), caption="Test Performance by Labeled Size", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "learning_curves.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Learning Curves - 10% ổn định nhất", width='stretch')
+                st.image(str(img_path), caption="Learning Curves - 10% ổn định nhất", use_container_width=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
             img_path = exp_dir / "pseudo_labels_comparison.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Pseudo-labels Activity", width='stretch')
+                st.image(str(img_path), caption="Pseudo-labels Activity", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "training_data_composition.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Training Data Composition", width='stretch')
+                st.image(str(img_path), caption="Training Data Composition", use_container_width=True)
         
         st.success("""
         **✅ Kết Luận Experiment 2:**
@@ -431,7 +431,7 @@ with tab3:
                 lambda x: ['background-color: #d1fae5; font-weight: bold' if '⭐' in str(x['Model']) else '' for _ in x],
                 axis=1
             ),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -501,24 +501,24 @@ with tab3:
         with col1:
             img_path = exp_dir / "test_performance_by_model.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Test Performance: HGBC vs RandomForest", width='stretch')
+                st.image(str(img_path), caption="Test Performance: HGBC vs RandomForest", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "learning_curves_by_model.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Learning Curves - HGBC ổn định, RF plateau", width='stretch')
+                st.image(str(img_path), caption="Learning Curves - HGBC ổn định, RF plateau", use_container_width=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
             img_path = exp_dir / "pseudo_labeling_by_model.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Pseudo-labeling - HGBC thêm 2x nhiều hơn RF", width='stretch')
+                st.image(str(img_path), caption="Pseudo-labeling - HGBC thêm 2x nhiều hơn RF", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "per_class_f1_heatmap.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Per-class F1 - HGBC đồng đều hơn", width='stretch')
+                st.image(str(img_path), caption="Per-class F1 - HGBC đồng đều hơn", use_container_width=True)
         
         st.success("""
         **✅ Kết Luận Experiment 3:**
@@ -571,7 +571,7 @@ with tab4:
                 lambda x: ['background-color: #d1fae5; font-weight: bold' if '⭐' in str(x['Schedule']) else '' for _ in x],
                 axis=1
             ),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
         
@@ -655,24 +655,24 @@ with tab4:
         with col1:
             img_path = exp_dir / "test_performance_by_schedule.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Test Performance: Fixed vs Aggressive", width='stretch')
+                st.image(str(img_path), caption="Test Performance: Fixed vs Aggressive", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "validation_curves_by_schedule.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Validation Curves", width='stretch')
+                st.image(str(img_path), caption="Validation Curves", use_container_width=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
             img_path = exp_dir / "pseudo_labeling_activity.png"
             if img_path.exists():
-                st.image(str(img_path), caption="Pseudo-labeling Activity - Aggressive ramp up", width='stretch')
+                st.image(str(img_path), caption="Pseudo-labeling Activity - Aggressive ramp up", use_container_width=True)
         
         with col2:
             img_path = exp_dir / "tau_performance_correlation.png"
             if img_path.exists():
-                st.image(str(img_path), caption="τ-Performance Correlation", width='stretch')
+                st.image(str(img_path), caption="τ-Performance Correlation", use_container_width=True)
         
         st.success("""
         **✅ Kết Luận Experiment 4:**
@@ -735,7 +735,7 @@ with tab5:
                     ],
                     axis=1
                 ),
-                width='stretch',
+                use_container_width=True,
                 hide_index=True
             )
             
@@ -816,24 +816,24 @@ with tab5:
             with col1:
                 img_path = exp_dir / "test_performance_by_strategy.png"
                 if img_path.exists():
-                    st.image(str(img_path), caption="Test Performance: 2 Strategies", width='stretch')
+                    st.image(str(img_path), caption="Test Performance: 2 Strategies", use_container_width=True)
             
             with col2:
                 img_path = exp_dir / "view_independence_analysis.png"
                 if img_path.exists():
-                    st.image(str(img_path), caption="View Independence Analysis", width='stretch')
+                    st.image(str(img_path), caption="View Independence Analysis", use_container_width=True)
             
             col1, col2 = st.columns(2)
             
             with col1:
                 img_path = exp_dir / "learning_curves_by_strategy.png"
                 if img_path.exists():
-                    st.image(str(img_path), caption="Learning Curves", width='stretch')
+                    st.image(str(img_path), caption="Learning Curves", use_container_width=True)
             
             with col2:
                 img_path = exp_dir / "comparison_with_baseline.png"
                 if img_path.exists():
-                    st.image(str(img_path), caption="Comparison with Self-Training", width='stretch')
+                    st.image(str(img_path), caption="Comparison with Self-Training", use_container_width=True)
             
             st.error("""
             **❌ Kết Luận Experiment 5:**
@@ -911,7 +911,7 @@ with tab6:
             ],
             axis=1
         ),
-        width='stretch',
+        use_container_width=True,
         hide_index=True
     )
     
@@ -1054,3 +1054,4 @@ st.markdown("""
     <p style='font-weight: 500; color: #0369a1;'>Yêu Cầu 3 Hoàn Thành | 5/5 Experiments Done | Best: Self-Training + HGBC + 10% + τ=0.90 | F1=0.50-0.53</p>
 </div>
 """, unsafe_allow_html=True)
+

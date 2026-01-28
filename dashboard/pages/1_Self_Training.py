@@ -172,7 +172,7 @@ try:
     
     st.dataframe(
         comparison_df.style.apply(highlight_best, axis=1),
-        width='stretch',
+        use_container_width=True,
         hide_index=True
     )
     
@@ -217,7 +217,7 @@ try:
         st.markdown("### 📈 Bảng Diễn Biến Chi Tiết")
         st.dataframe(
             iteration_data.style.background_gradient(subset=['Val F1-Macro'], cmap='RdYlGn'),
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
     
@@ -251,14 +251,14 @@ try:
     with col1:
         img_path = EXP_DIR / "pseudo_labels_over_iterations.png"
         if img_path.exists():
-            st.image(str(img_path), caption="Pseudo-labels Added Per Iteration (3 τ values)", width='stretch')
+            st.image(str(img_path), caption="Pseudo-labels Added Per Iteration (3 τ values)", use_container_width=True)
         else:
             st.warning("Image not found: pseudo_labels_over_iterations.png")
     
     with col2:
         img_path = EXP_DIR / "validation_f1_over_iterations.png"
         if img_path.exists():
-            st.image(str(img_path), caption="Validation F1-Macro Over 10 Iterations", width='stretch')
+            st.image(str(img_path), caption="Validation F1-Macro Over 10 Iterations", use_container_width=True)
         else:
             st.warning("Image not found: validation_f1_over_iterations.png")
 
@@ -327,7 +327,7 @@ try:
     
     st.dataframe(
         perclass_df.style.apply(highlight_minority, axis=1),
-        width='stretch',
+        use_container_width=True,
         hide_index=True
     )
     
@@ -355,7 +355,7 @@ try:
     # Visualization
     img_path = EXP_DIR / "test_performance_comparison.png"
     if img_path.exists():
-        st.image(str(img_path), caption="Test Performance Comparison: 3 τ values vs Baseline", width='stretch')
+        st.image(str(img_path), caption="Test Performance Comparison: 3 τ values vs Baseline", use_container_width=True)
 
 except Exception as e:
     st.error(f"Lỗi load hiệu năng: {str(e)}")
@@ -465,3 +465,4 @@ st.markdown("""
     <p style='font-weight: 500; color: #0369a1;'>Yêu Cầu 1 Hoàn Thành | Best Config: τ=0.90, 5% labeled, 10 iterations | F1=0.5343 (+13.3%)</p>
 </div>
 """, unsafe_allow_html=True)
+
